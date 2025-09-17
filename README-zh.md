@@ -291,7 +291,7 @@ echo 配置项已导出到 temp_config.txt
 
 ```batch
 :: =====================================================
-:: File      : bat-kv-sample.bat
+:: File      : Demo-Batch.bat
 :: Author    : WaterRun
 :: Description:
 ::   Bat-KV示例程序: 一个带历史记录功能的简单纯文本阅读器.
