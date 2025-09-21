@@ -48,7 +48,7 @@ Before getting started, let’s define some conventions:
 
 Follow these steps to integrate `Bat-KV` into your project:
 
-1. Download `Bat-KV.zip` from the [GitHub Release](https://github.com/Water-Run/Bat-KV) page and extract to a proper path.  
+1. Download `Bat-KV.zip` from the [GitHub Release](https://github.com/Water-Run/Bat-KV/releases/tag/Bat-KV) page and extract to a proper path.  
 2. Place the corresponding `Bat-KV.bat` file in an appropriate directory.  
 3. Import the file in your `.bat` script.  
 

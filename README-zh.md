@@ -48,7 +48,7 @@
 
 按照以下顺序操作即可在项目中引入`Bat-KV`:
 
-1. 从[GitHub Release](https://github.com/Water-Run/Bat-KV)页面下载`Bat-KV.zip`,并解压到合适的路径
+1. 从[GitHub Release](https://github.com/Water-Run/Bat-KV/releases/tag/Bat-KV)页面下载`Bat-KV.zip`,并解压到合适的路径
 2. 将对应的`Bat-KV.bat`放到合适的路径之中
 3. 在你的`.bat`中导入该文件
 
