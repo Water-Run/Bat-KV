@@ -1,576 +1,776 @@
-# Bat-KV: 为Windows批处理提供的简易KV数据库  
+# Bat-KV: 为Windows批处理提供的超轻量级KV数据库
 
 **`Bat-KV`是一个面向Windows批处理(`.bat`)的超轻量级单文件KV数据库.**  
 `Bat-KV`的实现很简单,使用也非常的容易上手,很适合存储一些简单的数据,如配置文件等.  
 **`Bat-KV`的文件存储在`.bkv`中**,是一种纯文本形式的,非常简单易读的格式,语法为`键\值`.默认路径在相对路径下的`_BATKV.bkv`.  
-`Bat-KV`对**键的约束为:纯英文,数字或下划线,且不超过36个字符**.**兼容性考虑,`Bat-KV`对键和值应兼容对应平台的`ANSI`字符.**  
-`Bat-KV`开源于[GitHub]().  
+`Bat-KV`开源于[GitHub](https://github.com/Water-Run/Bat-KV/).  
 
-## 引入`Bat-KV`  
+## 约定和规范
 
-按照以下顺序操作即可在项目中引入`Bat-KV`:  
+在开始之前,让我们先约定一些规范:  
 
-1. 从[GitHub Release]()页面下载`Bat-KV(1.0).zip`,并解压到合适的路径  
-2. 将对应的`Bat-KV.bat`放到合适的路径之中  
-3. 在你的`.bat`中导入该文件:  
+### 命名约定
+
+- **私有函数**: 以`BKV.Private.`为前缀,仅供内部使用,不要在外部代码中直接调用
+- **私有变量**: 以`BKV.Inner.`为前缀,仅供内部使用,不要在外部代码中访问或修改
+- **公共API**: 以`BKV.`为前缀(如`BKV.New`, `BKV.Fetch`等)
+- **返回变量**: 使用统一的`BKV_STATUS`, `BKV_RESULT`, `BKV_ERR`
+
+### 文件格式规范
+
+- **数据库文件**: 使用`.bkv`扩展名(Batch Key-Value)
+- **默认文件名**: `_BATKV.bkv`
+- **存储格式**: 每行一个键值对,格式为`key\value`
+- **字符编码**: 支持ANSI字符集,确保跨平台兼容性
+
+### 键名约束
+
+- **字符限制**: 键名只能包含英文字母、数字和下划线
+- **长度限制**: 键名不超过36个字符
+- **特殊字符**: 键名不能包含反斜杠(`\`)字符
+- **大小写**: 键名区分大小写
+
+### 值的约束
+
+- **字符支持**: 值可以包含任意ANSI字符(包括空格、标点符号等)
+- **特殊字符**: 值可以包含反斜杠,但在内部处理时需要注意转义
+- **长度**: 理论上无限制,但建议保持合理长度以确保性能
+
+### 换行和格式约定
+
+- **文件结构**: 每行一个键值对,空行会被忽略
+- **分隔符**: 键和值之间使用反斜杠(`\`)分隔
+- **行结束**: 使用Windows标准的CRLF换行符
+
+## 引入`Bat-KV`
+
+### 基本安装步骤
+
+按照以下顺序操作即可在项目中引入`Bat-KV`:
+
+1. 从[GitHub Release](https://github.com/Water-Run/Bat-KV)页面下载`Bat-KV.zip`,并解压到合适的路径
+2. 将对应的`Bat-KV.bat`放到合适的路径之中
+3. 在你的`.bat`中导入该文件
+
+### 直接调用
 
 ```batch
-REM 导入Bat-KV数据库功能
-REM 确保Bat-KV.bat文件在当前目录或PATH环境变量指定的路径中
-call Bat-KV.bat
+REM 确保Bat-KV.bat文件在当前目录
+call Bat-KV.bat :BKV.New
+echo Status: %BKV_STATUS%
+
+REM 如果Bat-KV.bat在子目录中
+call lib\Bat-KV.bat :BKV.New "mydata.bkv"
+
+REM 如果Bat-KV.bat在上级目录中  
+call ..\Bat-KV.bat :BKV.Fetch "username"
 ```
 
-> 参考本文档或阅读源码中的文档字符串,上手`Bat-KV`非常容易  
+### 全局使用(环境变量)  
 
-## API参考  
+**步骤1: 添加到环境变量**
 
-> 约定: `BKV.Private`开头的是内部方法,`BKV.Inner`开头的是内部变量.不要访问这些内容  
+1. 将`Bat-KV.bat`复制到一个固定目录,如`C:\Tools\BatKV\`
+2. 将该目录添加到系统的PATH环境变量中
+3. 重启命令提示符或重新登录
 
-### `BKV.New`  
+**步骤2: 全局使用**
 
-**说明:**  
+```batch
+REM 配置环境变量后,可以在任何位置直接调用
+call Bat-KV.bat :BKV.New
+call Bat-KV.bat :BKV.Append "config_path" "C:\MyApp\config.ini"
+call Bat-KV.bat :BKV.Fetch "config_path"
+echo Config location: %BKV_RESULT%
+```
 
-新建一个`.bkv`文件,如果文件已存在则不会覆盖现有内容.  
+### 最基础的使用示例
 
-***参数:***  
+```batch
+@echo off
+REM 最简单的Bat-KV使用示例
 
-1. **File_Name**: *(可选)* 创建的`.bkv`文件名称,缺省为`_BATKV.bkv`  
+REM 创建数据库
+call Bat-KV.bat :BKV.New
+echo Create database: %BKV_STATUS%
 
-***返回值:***  
+REM 添加数据
+call Bat-KV.bat :BKV.Append "name" "Alice"
+call Bat-KV.bat :BKV.Append "age" "25"
+call Bat-KV.bat :BKV.Append "city" "Beijing"
 
-- `BKV.New-Status`: 执行成功为`OK`,失败为`NotOK`.缺省值为`NA`.  
+REM 读取数据
+call Bat-KV.bat :BKV.Fetch "name"
+echo Name: %BKV_RESULT%
 
-*示例:*  
+call Bat-KV.bat :BKV.Fetch "age"  
+echo Age: %BKV_RESULT%
+
+REM 检查数据是否存在
+call Bat-KV.bat :BKV.Include "email"
+if "%BKV_RESULT%"=="No" (
+    echo Email not set, adding default...
+    call Bat-KV.bat :BKV.Append "email" "alice@example.com"
+)
+
+REM 删除数据
+call Bat-KV.bat :BKV.Remove "city"
+echo Remove city: %BKV_STATUS%
+
+pause
+```
+
+> 参考本文档或阅读源码中的文档字符串,上手`Bat-KV`非常容易
+
+## API参考
+
+> **重要约定**: `BKV.Private`开头的是内部方法,`BKV.Inner`开头的是内部变量.不要访问这些内容
+
+### `BKV.New`
+
+**说明:**
+
+新建一个`.bkv`文件,如果文件已存在则不会覆盖现有内容.
+
+***参数:***
+
+1. **File_Name**: *(可选)* 创建的`.bkv`文件名称,缺省为`_BATKV.bkv`
+
+***返回值:***
+
+- `BKV_STATUS`: 执行成功为`OK`,失败为`NotOK`
+- `BKV_ERR`: 失败时包含错误描述,格式为`Bat-KV ERR: [错误信息]`
+
+*示例:*
 
 ```batch
 REM 创建默认的数据库文件
-call BKV.New
-echo 创建状态: %BKV.New-Status%
+call Bat-KV.bat :BKV.New
+echo Create status: %BKV_STATUS%
 
 REM 创建指定名称的数据库文件
-call BKV.New "config.bkv"
-if "%BKV.New-Status%"=="OK" (
-    echo 数据库文件 config.bkv 创建成功
+call Bat-KV.bat :BKV.New "config.bkv"
+if "%BKV_STATUS%"=="OK" (
+    echo Database config.bkv created successfully
 ) else (
-    echo 数据库文件创建失败
+    echo Failed to create database: %BKV_ERR%
 )
 ```
 
-### `BKV.Erase`  
+### `BKV.Erase`
 
-**说明:**  
+**说明:**
 
-删除一个`.bkv`文件,包括文件中的所有数据.  
+删除一个`.bkv`文件,包括文件中的所有数据.
 
-***参数:***  
+***参数:***
 
-1. **File_Name**: *(可选)* 删除的`.bkv`文件名称,缺省为`_BATKV.bkv`  
+1. **File_Name**: *(可选)* 删除的`.bkv`文件名称,缺省为`_BATKV.bkv`
 
-***返回值:***  
+***返回值:***
 
-- `BKV.Erase-Status`: 执行成功为`OK`,失败为`NotOK`.缺省值为`NA`.  
+- `BKV_STATUS`: 执行成功为`OK`,失败为`NotOK`
+- `BKV_ERR`: 失败时包含错误描述,格式为`Bat-KV ERR: [错误信息]`
 
-*示例:*  
+*示例:*
 
 ```batch
 REM 删除默认数据库文件
-call BKV.Erase
-if "%BKV.Erase-Status%"=="OK" (
-    echo 默认数据库已删除
+call Bat-KV.bat :BKV.Erase
+if "%BKV_STATUS%"=="OK" (
+    echo Default database deleted
 )
 
 REM 删除指定的数据库文件
-call BKV.Erase "temp.bkv"
-echo 删除操作状态: %BKV.Erase-Status%
+call Bat-KV.bat :BKV.Erase "temp.bkv"
+echo Delete operation status: %BKV_STATUS%
 ```
 
-### `BKV.Append`  
+### `BKV.Append`
 
-**说明:**  
+**说明:**
 
-增加一个键值对.如果键已存在,则更新对应的值.  
+增加一个键值对.如果键已存在,则更新对应的值.
 
-***参数:***  
+***参数:***
 
-1. `Key`: 增加的键名(必须符合命名规范)  
-2. `Value`: 对应的值  
-3. `File_Name`: *(可选)* 目标`.bkv`文件名称,缺省为`_BATKV.bkv`  
+1. `Key`: 增加的键名(必须符合命名规范)
+2. `Value`: 对应的值
+3. `File_Name`: *(可选)* 目标`.bkv`文件名称,缺省为`_BATKV.bkv`
 
-***返回值:***  
+***返回值:***
 
-- `BKV.Append-Status`: 执行成功为`OK`,失败为`NotOK`.缺省值为`NA`.  
+- `BKV_STATUS`: 执行成功为`OK`,失败为`NotOK`
+- `BKV_ERR`: 失败时包含错误描述,格式为`Bat-KV ERR: [错误信息]`
 
-*示例:*  
+*示例:*
 
 ```batch
 REM 向默认数据库添加用户名
-call BKV.Append "username" "Alice"
-echo 添加用户名状态: %BKV.Append-Status%
+call Bat-KV.bat :BKV.Append "username" "Alice"
+echo Add username status: %BKV_STATUS%
 
 REM 向指定数据库添加配置项
-call BKV.Append "max_retry" "3" "config.bkv"
+call Bat-KV.bat :BKV.Append "max_retry" "3" "config.bkv"
 
 REM 添加包含空格的值
-call BKV.Append "app_title" "My Application v1.0"
-if "%BKV.Append-Status%"=="OK" (
-    echo 应用标题设置成功
+call Bat-KV.bat :BKV.Append "app_title" "My Application v1.0"
+if "%BKV_STATUS%"=="OK" (
+    echo Application title set successfully
+) else (
+    echo Failed to set title: %BKV_ERR%
 )
 ```
 
-### `BKV.Remove`  
+### `BKV.Remove`
 
-**说明:**  
+**说明:**
 
-删除一个键值对.如果键不存在,操作仍然返回成功状态.  
+删除一个键值对.如果键不存在,操作仍然返回成功状态.
 
-***参数:***  
+***参数:***
 
-1. `Key`: 删除的键名  
-2. `File-Name`: *(可选)* 目标`.bkv`文件名称,缺省为`_BATKV.bkv`  
+1. `Key`: 删除的键名
+2. `File_Name`: *(可选)* 目标`.bkv`文件名称,缺省为`_BATKV.bkv`
 
-***返回值:***  
+***返回值:***
 
-- `BKV.Remove-Status`: 执行成功为`OK`,失败为`NotOK`.缺省值为`NA`.  
+- `BKV_STATUS`: 执行成功为`OK`,失败为`NotOK`
+- `BKV_ERR`: 失败时包含错误描述,格式为`Bat-KV ERR: [错误信息]`
 
-*示例:*  
+*示例:*
 
 ```batch
 REM 从默认数据库删除临时配置
-call BKV.Remove "temp_setting"
-echo 删除状态: %BKV.Remove-Status%
+call Bat-KV.bat :BKV.Remove "temp_setting"
+echo Delete status: %BKV_STATUS%
 
 REM 从指定数据库删除过期数据
-call BKV.Remove "session_id" "cache.bkv"
+call Bat-KV.bat :BKV.Remove "session_id" "cache.bkv"
 
 REM 批量删除示例(需要逐个调用)
-call BKV.Remove "old_key1"
-call BKV.Remove "old_key2"
-call BKV.Remove "old_key3"
-echo 批量删除完成
+call Bat-KV.bat :BKV.Remove "old_key1"
+call Bat-KV.bat :BKV.Remove "old_key2"
+call Bat-KV.bat :BKV.Remove "old_key3"
+echo Batch deletion completed
 ```
 
-### `BKV.Fetch`  
+### `BKV.Fetch`
 
-**说明:**  
+**说明:**
 
-读取一个键值对的值.这是查询数据的主要方法.  
+读取一个键值对的值.这是查询数据的主要方法.
 
-***参数:***  
+***参数:***
 
-1. `Key`: 查找的键名  
-2. `File-Name`: *(可选)* 目标`.bkv`文件名称,缺省为`_BATKV.bkv`  
+1. `Key`: 查找的键名
+2. `File_Name`: *(可选)* 目标`.bkv`文件名称,缺省为`_BATKV.bkv`
 
-***返回值:***  
+***返回值:***
 
-- `BKV.Fetch-Status`: 执行成功为`OK`,失败为`NotOK`.缺省值为`NA`.  
-- `BKV.Fetch-Result`: 读取到的对应值.如果键不存在则为空,缺省值为`(Default)`.  
+- `BKV_STATUS`: 执行成功为`OK`,失败为`NotOK`
+- `BKV_RESULT`: 读取到的对应值.如果键不存在则为空字符串
+- `BKV_ERR`: 失败时包含错误描述,格式为`Bat-KV ERR: [错误信息]`
 
-*示例:*  
+*示例:*
 
 ```batch
 REM 读取用户配置
-call BKV.Fetch "username"
-if "%BKV.Fetch-Status%"=="OK" (
-    echo 当前用户: %BKV.Fetch-Result%
+call Bat-KV.bat :BKV.Fetch "username"
+if "%BKV_STATUS%"=="OK" (
+    if not "%BKV_RESULT%"=="" (
+        echo Current user: %BKV_RESULT%
+    ) else (
+        echo Username not set
+    )
 ) else (
-    echo 无法读取用户名
+    echo Cannot read username: %BKV_ERR%
 )
 
 REM 读取数值配置并进行计算
-call BKV.Fetch "retry_count" "config.bkv"
-if not "%BKV.Fetch-Result%"=="" (
-    set /a next_retry=%BKV.Fetch-Result%+1
-    echo 下次重试次数: %next_retry%
+call Bat-KV.bat :BKV.Fetch "retry_count" "config.bkv"
+if "%BKV_STATUS%"=="OK" (
+    if not "%BKV_RESULT%"=="" (
+        set /a next_retry=%BKV_RESULT%+1
+        echo Next retry count: %next_retry%
+    )
 )
 
 REM 读取配置项并设置默认值
-call BKV.Fetch "theme"
-if "%BKV.Fetch-Result%"=="" (
-    set current_theme=default
-    echo 使用默认主题
-) else (
-    set current_theme=%BKV.Fetch-Result%
-    echo 当前主题: %current_theme%
-)
-```
-
-### `BKV.Include`  
-
-**说明:**  
-
-判断文件中是否存在指定的键.用于检查配置项是否已设置.  
-
-***参数:***  
-
-1. `Key`: 被判断的键名  
-2. `File-Name`: *(可选)* 目标`.bkv`文件名称,缺省为`_BATKV.bkv`  
-
-***返回值:***  
-
-- `BKV.Include-Status`: 执行成功为`OK`,失败为`NotOK`.缺省值为`NA`.  
-- `BKV.Include-Result`: 判断的结果.存在为`Yes`,不存在为`No`,缺省值为`(Default)`.  
-
-*示例:*  
-
-```batch
-REM 检查是否已配置数据库连接
-call BKV.Include "db_host"
-if "%BKV.Include-Result%"=="Yes" (
-    echo 数据库配置已存在
-    call BKV.Fetch "db_host"
-    echo 数据库主机: %BKV.Fetch-Result%
-) else (
-    echo 请先配置数据库连接
-    call BKV.Append "db_host" "localhost"
-)
-
-REM 检查初始化状态
-call BKV.Include "initialized" "app.bkv"
-if "%BKV.Include-Status%"=="OK" (
-    if "%BKV.Include-Result%"=="No" (
-        echo 执行首次初始化...
-        call BKV.Append "initialized" "true" "app.bkv"
-        call BKV.Append "install_date" "%date%" "app.bkv"
+call Bat-KV.bat :BKV.Fetch "theme"
+if "%BKV_STATUS%"=="OK" (
+    if "%BKV_RESULT%"=="" (
+        set current_theme=default
+        echo Using default theme
+    ) else (
+        set current_theme=%BKV_RESULT%
+        echo Current theme: %current_theme%
     )
 )
 ```
 
-### `BKV.Grep`  
+### `BKV.Include`
 
-**说明:**  
+**说明:**
 
-匹配符合正则表达式的键,返回键值对列表.适用于批量查询和模糊搜索.  
+判断文件中是否存在指定的键.用于检查配置项是否已设置.
 
-> **正则表达式使用`findstr`实现**,正则表达式为非完整实现,支持基本的模式匹配  
+***参数:***
 
-> 返回的键值对列表(以字符串形式实现)格式说明:(本质上**和存储在`.bkv`内的文本内容一致**)  
->> [键1]\[值1]  
->> [键2]\[值2]  
->> ...  
->> [最后一个键]\[最后一个值]
+1. `Key`: 被判断的键名
+2. `File_Name`: *(可选)* 目标`.bkv`文件名称,缺省为`_BATKV.bkv`
 
-***参数:***  
+***返回值:***
 
-1. `Match-Regex`: 匹配的正则表达式  
-2. `File-Name`: *(可选)* 目标`.bkv`文件名称,缺省为`_BATKV.bkv`  
+- `BKV_STATUS`: 执行成功为`OK`,失败为`NotOK`
+- `BKV_RESULT`: 判断的结果.存在为`Yes`,不存在为`No`
+- `BKV_ERR`: 失败时包含错误描述,格式为`Bat-KV ERR: [错误信息]`
 
-***返回值:***  
-
-- `BKV.Grep-Result`: 匹配到的键值对,以前文所述的格式表示.缺省值为`(Default)`.  
-- `BKV.Grep-Status`: 执行成功为`OK`,失败为`NotOK`.缺省值为`NA`.  
-
-*示例:*  
+*示例:*
 
 ```batch
-REM 查找所有以"user"开头的配置项
-call BKV.Grep "^user"
-if "%BKV.Grep-Status%"=="OK" (
-    echo 用户相关配置:
-    echo %BKV.Grep-Result%
-)
-
-REM 查找包含"temp"的所有键
-call BKV.Grep "temp" "cache.bkv"
-echo 临时数据: %BKV.Grep-Result%
-
-REM 查找所有数字结尾的键(使用findstr正则语法)
-call BKV.Grep "[0-9]$"
-if not "%BKV.Grep-Result%"=="" (
-    echo 找到以数字结尾的键:
-    echo %BKV.Grep-Result%
+REM 检查是否已配置数据库连接
+call Bat-KV.bat :BKV.Include "db_host"
+if "%BKV_STATUS%"=="OK" (
+    if "%BKV_RESULT%"=="Yes" (
+        echo Database configuration exists
+        call Bat-KV.bat :BKV.Fetch "db_host"
+        echo Database host: %BKV_RESULT%
+    ) else (
+        echo Please configure database connection first
+        call Bat-KV.bat :BKV.Append "db_host" "localhost"
+    )
 ) else (
-    echo 未找到匹配的键
+    echo Failed to check configuration: %BKV_ERR%
 )
 
-REM 将匹配结果保存到临时文件进行进一步处理
-call BKV.Grep "config_" > temp_config.txt
-echo 配置项已导出到 temp_config.txt
+REM 检查初始化状态
+call Bat-KV.bat :BKV.Include "initialized" "app.bkv"
+if "%BKV_STATUS%"=="OK" (
+    if "%BKV_RESULT%"=="No" (
+        echo Performing first-time initialization...
+        call Bat-KV.bat :BKV.Append "initialized" "true" "app.bkv"
+        call Bat-KV.bat :BKV.Append "install_date" "%date%" "app.bkv"
+    )
+)
 ```
 
-## 示例程序  
+## 示例程序
 
 ```batch
 :: =====================================================
-:: File      : Demo-Batch.bat
+:: File      : BKV-DBMS.bat
 :: Author    : WaterRun
 :: Description:
-::   Bat-KV示例程序: 一个带历史记录功能的简单纯文本阅读器.
-::   支持设置软件的使用者,以及获取最近对应文件载入时间等历史信息
+::   Bat-KV example program: Simple database manager
+::   Demonstrates basic CRUD operations and practical usage scenarios
 ::   
-::   功能说明:
-::   1. 用户管理: 设置和显示当前用户名
-::   2. 文件历史: 记录最近打开的文件及访问时间
-::   3. 阅读统计: 统计用户的文件阅读次数
-::   4. 配置管理: 保存用户偏好设置
+::   Features:
+::   1. Database management: Create, delete database files
+::   2. Key-value operations: Add, query, delete key-value pairs
+::   3. Data browsing: View all data and statistics
+::   4. Configuration management: Save and restore application settings
 :: =====================================================
 
 @echo off
 setlocal EnableDelayedExpansion
 
-REM 导入Bat-KV数据库功能
-call Bat-KV.bat
+echo ================================
+echo   Bat-KV Database Manager v1.0
+echo ================================
+echo.
 
-REM 初始化应用数据库文件
-call BKV.New "reader_app.bkv"
+REM Initialize application configuration database
+call Bat-KV.bat :BKV.New "manager_config.bkv"
+
+REM Check if this is the first run
+call Bat-KV.bat :BKV.Include "first_run" "manager_config.bkv"
+if "%BKV_STATUS%"=="OK" (
+    if "%BKV_RESULT%"=="No" (
+        echo Welcome to Bat-KV Database Manager!
+        call Bat-KV.bat :BKV.Append "first_run" "false" "manager_config.bkv"
+        call Bat-KV.bat :BKV.Append "install_time" "%date% %time%" "manager_config.bkv"
+        call Bat-KV.bat :BKV.Append "default_database" "my_data.bkv" "manager_config.bkv"
+        echo Initialization completed
+        echo.
+    )
+)
+
+REM Get default database name
+call Bat-KV.bat :BKV.Fetch "default_database" "manager_config.bkv"
+if "%BKV_STATUS%"=="OK" (
+    if not "%BKV_RESULT%"=="" (
+        set "current_db=%BKV_RESULT%"
+    ) else (
+        set "current_db=my_data.bkv"
+    )
+) else (
+    set "current_db=my_data.bkv"
+)
 
 :MAIN_MENU
 cls
 echo ================================
-echo    纯文本阅读器 v1.0
-echo    Powered by Bat-KV Database
+echo   Bat-KV Database Manager v1.0
 echo ================================
 echo.
+echo Current database: %current_db%
 
-REM 显示当前用户信息
-call BKV.Fetch "current_user" "reader_app.bkv"
-if "%BKV.Fetch-Status%"=="OK" (
-    if not "%BKV.Fetch-Result%"=="" (
-        echo 当前用户: %BKV.Fetch-Result%
-    ) else (
-        echo 当前用户: 未设置
-    )
+REM Check if current database exists
+if exist "%current_db%" (
+    echo Status: Connected
 ) else (
-    echo 当前用户: 未设置
+    echo Status: Database does not exist
 )
 
 echo.
-echo 1. 设置用户名
-echo 2. 打开文件阅读
-echo 3. 查看阅读历史
-echo 4. 查看阅读统计
-echo 5. 清除所有数据
-echo 0. 退出程序
+echo 1. Database Operations
+echo 2. Key-Value Management
+echo 3. Data Browsing
+echo 4. Application Settings
+echo 0. Exit Program
 echo.
-set /p choice="请选择操作 (0-5): "
+set /p choice="Please select operation (0-4): "
 
-if "%choice%"=="1" goto SET_USER
-if "%choice%"=="2" goto READ_FILE
-if "%choice%"=="3" goto VIEW_HISTORY
-if "%choice%"=="4" goto VIEW_STATS
-if "%choice%"=="5" goto CLEAR_DATA
+if "%choice%"=="1" goto DATABASE_MENU
+if "%choice%"=="2" goto KEYVALUE_MENU
+if "%choice%"=="3" goto BROWSE_MENU
+if "%choice%"=="4" goto SETTINGS_MENU
 if "%choice%"=="0" goto EXIT
 goto MAIN_MENU
 
-:SET_USER
+:DATABASE_MENU
 cls
 echo ================================
-echo         设置用户名
+echo       Database Operations
 echo ================================
 echo.
-set /p username="请输入用户名: "
+echo Current database: %current_db%
+echo.
+echo 1. Create New Database
+echo 2. Switch Database
+echo 3. Delete Database
+echo 4. Database Information
+echo 0. Return to Main Menu
+echo.
+set /p db_choice="Please select operation (0-4): "
 
-REM 验证用户名不为空
-if "%username%"=="" (
-    echo 用户名不能为空!
+if "%db_choice%"=="1" goto CREATE_DB
+if "%db_choice%"=="2" goto SWITCH_DB
+if "%db_choice%"=="3" goto DELETE_DB
+if "%db_choice%"=="4" goto DB_INFO
+if "%db_choice%"=="0" goto MAIN_MENU
+goto DATABASE_MENU
+
+:CREATE_DB
+echo.
+set /p new_db="Enter new database name (e.g. data.bkv): "
+if "%new_db%"=="" (
+    echo Database name cannot be empty!
+    pause
+    goto DATABASE_MENU
+)
+
+call Bat-KV.bat :BKV.New "%new_db%"
+if "%BKV_STATUS%"=="OK" (
+    echo Database %new_db% created successfully!
+    set "current_db=%new_db%"
+    
+    REM Save as default database
+    call Bat-KV.bat :BKV.Append "default_database" "%new_db%" "manager_config.bkv"
+) else (
+    echo Database creation failed: %BKV_ERR%
+)
+pause
+goto DATABASE_MENU
+
+:SWITCH_DB
+echo.
+set /p switch_db="Enter database name to switch to: "
+if "%switch_db%"=="" (
+    echo Database name cannot be empty!
+    pause
+    goto DATABASE_MENU
+)
+
+if exist "%switch_db%" (
+    set "current_db=%switch_db%"
+    call Bat-KV.bat :BKV.Append "default_database" "%switch_db%" "manager_config.bkv"
+    echo Switched to database: %switch_db%
+) else (
+    echo Database file does not exist: %switch_db%
+)
+pause
+goto DATABASE_MENU
+
+:DELETE_DB
+echo.
+echo Warning: This operation will permanently delete the database file!
+set /p delete_db="Enter database name to delete: "
+if "%delete_db%"=="" (
+    echo Database name cannot be empty!
+    pause
+    goto DATABASE_MENU
+)
+
+echo Confirm deletion of database: %delete_db%
+set /p confirm="Type YES to confirm deletion: "
+if "%confirm%"=="YES" (
+    call Bat-KV.bat :BKV.Erase "%delete_db%"
+    if "%BKV_STATUS%"=="OK" (
+        echo Database %delete_db% has been deleted
+        if "%delete_db%"=="%current_db%" (
+            set "current_db=my_data.bkv"
+            call Bat-KV.bat :BKV.Append "default_database" "my_data.bkv" "manager_config.bkv"
+        )
+    ) else (
+        echo Deletion failed: %BKV_ERR%
+    )
+) else (
+    echo Deletion operation cancelled
+)
+pause
+goto DATABASE_MENU
+
+:DB_INFO
+echo.
+echo Database Information:
+echo File name: %current_db%
+if exist "%current_db%" (
+    echo Status: Exists
+    
+    REM Count key-value pairs
+    set count=0
+    for /f "usebackq delims=" %%i in ("%current_db%") do (
+        set /a count+=1
+    )
+    echo Key-value pairs: !count!
+    
+    REM Display file size
+    for %%i in ("%current_db%") do echo File size: %%~zi bytes
+) else (
+    echo Status: Does not exist
+)
+pause
+goto DATABASE_MENU
+
+:KEYVALUE_MENU
+cls
+echo ================================
+echo       Key-Value Management
+echo ================================
+echo.
+echo Current database: %current_db%
+echo.
+echo 1. Add Key-Value Pair
+echo 2. Query Key Value
+echo 3. Delete Key-Value Pair
+echo 4. Check if Key Exists
+echo 0. Return to Main Menu
+echo.
+set /p kv_choice="Please select operation (0-4): "
+
+if "%kv_choice%"=="1" goto ADD_KV
+if "%kv_choice%"=="2" goto QUERY_KV
+if "%kv_choice%"=="3" goto DELETE_KV
+if "%kv_choice%"=="4" goto CHECK_KV
+if "%kv_choice%"=="0" goto MAIN_MENU
+goto KEYVALUE_MENU
+
+:ADD_KV
+echo.
+set /p key="Enter key name: "
+if "%key%"=="" (
+    echo Key name cannot be empty!
+    pause
+    goto KEYVALUE_MENU
+)
+
+set /p value="Enter value: "
+if "%value%"=="" (
+    echo Value cannot be empty!
+    pause
+    goto KEYVALUE_MENU
+)
+
+call Bat-KV.bat :BKV.Append "%key%" "%value%" "%current_db%"
+if "%BKV_STATUS%"=="OK" (
+    echo Key-value pair added successfully: %key% = %value%
+) else (
+    echo Addition failed: %BKV_ERR%
+)
+pause
+goto KEYVALUE_MENU
+
+:QUERY_KV
+echo.
+set /p query_key="Enter key name to query: "
+if "%query_key%"=="" (
+    echo Key name cannot be empty!
+    pause
+    goto KEYVALUE_MENU
+)
+
+call Bat-KV.bat :BKV.Fetch "%query_key%" "%current_db%"
+if "%BKV_STATUS%"=="OK" (
+    if not "%BKV_RESULT%"=="" (
+        echo Query result: %query_key% = %BKV_RESULT%
+    ) else (
+        echo Key "%query_key%" does not exist
+    )
+) else (
+    echo Query failed: %BKV_ERR%
+)
+pause
+goto KEYVALUE_MENU
+
+:DELETE_KV
+echo.
+set /p del_key="Enter key name to delete: "
+if "%del_key%"=="" (
+    echo Key name cannot be empty!
+    pause
+    goto KEYVALUE_MENU
+)
+
+call Bat-KV.bat :BKV.Remove "%del_key%" "%current_db%"
+if "%BKV_STATUS%"=="OK" (
+    echo Key "%del_key%" has been deleted
+) else (
+    echo Deletion failed: %BKV_ERR%
+)
+pause
+goto KEYVALUE_MENU
+
+:CHECK_KV
+echo.
+set /p check_key="Enter key name to check: "
+if "%check_key%"=="" (
+    echo Key name cannot be empty!
+    pause
+    goto KEYVALUE_MENU
+)
+
+call Bat-KV.bat :BKV.Include "%check_key%" "%current_db%"
+if "%BKV_STATUS%"=="OK" (
+    if "%BKV_RESULT%"=="Yes" (
+        echo Key "%check_key%" exists
+    ) else (
+        echo Key "%check_key%" does not exist
+    )
+) else (
+    echo Check failed: %BKV_ERR%
+)
+pause
+goto KEYVALUE_MENU
+
+:BROWSE_MENU
+cls
+echo ================================
+echo         Data Browsing
+echo ================================
+echo.
+echo Current database: %current_db%
+
+if not exist "%current_db%" (
+    echo Database file does not exist!
     pause
     goto MAIN_MENU
 )
 
-REM 保存用户名到数据库
-call BKV.Append "current_user" "%username%" "reader_app.bkv"
-if "%BKV.Append-Status%"=="OK" (
-    echo 用户名设置成功: %username%
-    
-    REM 记录用户设置时间
-    call BKV.Append "user_set_time" "%date% %time%" "reader_app.bkv"
-) else (
-    echo 用户名设置失败!
+echo.
+echo Database content:
+echo --- Start ---
+type "%current_db%"
+echo --- End ---
+echo.
+
+REM Statistics
+set count=0
+for /f "usebackq delims=" %%i in ("%current_db%") do (
+    set /a count+=1
 )
-pause
+echo Total: !count! key-value pairs
+
+echo.
+echo Press any key to return to main menu...
+pause >nul
 goto MAIN_MENU
 
-:READ_FILE
+:SETTINGS_MENU
 cls
 echo ================================
-echo         打开文件阅读
+echo      Application Settings
 echo ================================
 echo.
-set /p filename="请输入文件路径: "
-
-REM 检查文件是否存在
-if not exist "%filename%" (
-    echo 文件不存在: %filename%
-    pause
-    goto MAIN_MENU
-)
-
-REM 显示文件内容
+echo 1. View Application Information
+echo 2. Reset Application Configuration
+echo 0. Return to Main Menu
 echo.
-echo --- 文件内容 ---
-type "%filename%"
+set /p setting_choice="Please select operation (0-2): "
+
+if "%setting_choice%"=="1" goto APP_INFO
+if "%setting_choice%"=="2" goto RESET_CONFIG
+if "%setting_choice%"=="0" goto MAIN_MENU
+goto SETTINGS_MENU
+
+:APP_INFO
 echo.
-echo --- 文件结束 ---
+echo Application Information:
+echo Program name: Bat-KV Database Manager
+echo Version: 1.0
 echo.
 
-REM 记录文件访问历史
-call BKV.Append "last_file" "%filename%" "reader_app.bkv"
-call BKV.Append "last_access_time" "%date% %time%" "reader_app.bkv"
-
-REM 更新该文件的访问次数
-call BKV.Fetch "count_%filename: =_%" "reader_app.bkv"
-if "%BKV.Fetch-Status%"=="OK" (
-    if "%BKV.Fetch-Result%"=="" (
-        set file_count=1
-    ) else (
-        set /a file_count=%BKV.Fetch-Result%+1
+call Bat-KV.bat :BKV.Fetch "install_time" "manager_config.bkv"
+if "%BKV_STATUS%"=="OK" (
+    if not "%BKV_RESULT%"=="" (
+        echo Install time: %BKV_RESULT%
     )
-) else (
-    set file_count=1
 )
-call BKV.Append "count_%filename: =_%" "%file_count%" "reader_app.bkv"
 
-REM 更新总阅读次数
-call BKV.Fetch "total_reads" "reader_app.bkv"
-if "%BKV.Fetch-Status%"=="OK" (
-    if "%BKV.Fetch-Result%"=="" (
-        set total_reads=1
-    ) else (
-        set /a total_reads=%BKV.Fetch-Result%+1
-    )
-) else (
-    set total_reads=1
+call Bat-KV.bat :BKV.Fetch "default_database" "manager_config.bkv"
+if "%BKV_STATUS%"=="OK" (
+    echo Default database: %BKV_RESULT%
 )
-call BKV.Append "total_reads" "%total_reads%" "reader_app.bkv"
 
-echo 文件已读取完毕, 访问记录已保存
+echo Configuration file: manager_config.bkv
 pause
-goto MAIN_MENU
+goto SETTINGS_MENU
 
-:VIEW_HISTORY
-cls
-echo ================================
-echo         阅读历史记录
-echo ================================
+:RESET_CONFIG
 echo.
-
-REM 显示最后访问的文件
-call BKV.Fetch "last_file" "reader_app.bkv"
-if "%BKV.Fetch-Status%"=="OK" (
-    if not "%BKV.Fetch-Result%"=="" (
-        echo 最后阅读文件: %BKV.Fetch-Result%
-        
-        REM 显示访问时间
-        call BKV.Fetch "last_access_time" "reader_app.bkv"
-        if not "%BKV.Fetch-Result%"=="" (
-            echo 访问时间: %BKV.Fetch-Result%
-        )
-        
-        REM 显示该文件的访问次数
-        call BKV.Fetch "count_%BKV.Fetch-Result: =_%" "reader_app.bkv"
-        if not "%BKV.Fetch-Result%"=="" (
-            echo 该文件访问次数: %BKV.Fetch-Result%
-        )
+echo Warning: This operation will reset all application configuration!
+set /p reset_confirm="Type RESET to confirm: "
+if "%reset_confirm%"=="RESET" (
+    call Bat-KV.bat :BKV.Erase "manager_config.bkv"
+    if "%BKV_STATUS%"=="OK" (
+        echo Configuration has been reset, program will restart...
+        pause
+        goto :EOF
     ) else (
-        echo 暂无阅读历史
+        echo Reset failed: %BKV_ERR%
     )
 ) else (
-    echo 暂无阅读历史
+    echo Reset operation cancelled
 )
-
-echo.
-echo --- 所有历史记录 ---
-REM 使用正则表达式查找所有计数记录
-call BKV.Grep "^count_" "reader_app.bkv"
-if "%BKV.Grep-Status%"=="OK" (
-    if not "%BKV.Grep-Result%"=="" (
-        echo %BKV.Grep-Result%
-    ) else (
-        echo 暂无详细记录
-    )
-) else (
-    echo 无法获取历史记录
-)
-
 pause
-goto MAIN_MENU
-
-:VIEW_STATS
-cls
-echo ================================
-echo         阅读统计信息
-echo ================================
-echo.
-
-REM 显示当前用户
-call BKV.Fetch "current_user" "reader_app.bkv"
-if not "%BKV.Fetch-Result%"=="" (
-    echo 用户: %BKV.Fetch-Result%
-    
-    REM 显示用户设置时间
-    call BKV.Fetch "user_set_time" "reader_app.bkv"
-    if not "%BKV.Fetch-Result%"=="" (
-        echo 用户设置时间: %BKV.Fetch-Result%
-    )
-)
-
-REM 显示总阅读次数
-call BKV.Fetch "total_reads" "reader_app.bkv"
-if "%BKV.Fetch-Status%"=="OK" (
-    if not "%BKV.Fetch-Result%"=="" (
-        echo 总阅读次数: %BKV.Fetch-Result%
-    ) else (
-        echo 总阅读次数: 0
-    )
-) else (
-    echo 总阅读次数: 0
-)
-
-REM 显示最后访问信息
-call BKV.Fetch "last_access_time" "reader_app.bkv"
-if not "%BKV.Fetch-Result%"=="" (
-    echo 最后访问时间: %BKV.Fetch-Result%
-)
-
-echo.
-echo --- 详细统计 ---
-REM 显示所有配置信息
-call BKV.Grep "." "reader_app.bkv"
-if "%BKV.Grep-Status%"=="OK" (
-    echo 数据库中的所有记录:
-    echo %BKV.Grep-Result%
-)
-
-pause
-goto MAIN_MENU
-
-:CLEAR_DATA
-cls
-echo ================================
-echo         清除所有数据
-echo ================================
-echo.
-echo 警告: 此操作将删除所有用户数据和阅读记录!
-set /p confirm="确认删除吗? (y/N): "
-
-if /i "%confirm%"=="y" (
-    call BKV.Erase "reader_app.bkv"
-    if "%BKV.Erase-Status%"=="OK" (
-        echo 所有数据已清除
-        
-        REM 重新创建空的数据库文件
-        call BKV.New "reader_app.bkv"
-    ) else (
-        echo 数据清除失败
-    )
-) else (
-    echo 操作已取消
-)
-
-pause
-goto MAIN_MENU
+goto SETTINGS_MENU
 
 :EXIT
 cls
-echo 谢谢使用纯文本阅读器!
+echo Thank you for using Bat-KV Database Manager!
 echo.
 
-REM 显示退出统计
-call BKV.Fetch "total_reads" "reader_app.bkv"
-if not "%BKV.Fetch-Result%"=="" (
-    echo 本次会话总计阅读: %BKV.Fetch-Result% 个文件
+REM Display exit statistics
+call Bat-KV.bat :BKV.Fetch "install_time" "manager_config.bkv"
+if "%BKV_STATUS%"=="OK" (
+    if not "%BKV_RESULT%"=="" (
+        echo Install time: %BKV_RESULT%
+    )
 )
 
-echo 再见!
+echo Current database: %current_db%
+echo Goodbye!
 pause
 exit /b 0
 ```
