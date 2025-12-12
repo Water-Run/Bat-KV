@@ -1,12 +1,13 @@
 @echo off
 :: =====================================================
 :: File      : Bat-KV.bat
-:: Version   : 1.0
+:: Version   : 2.0
 :: Author    : WaterRun
 :: Description:
 ::   Bat-KV is an ultra-lightweight single-file KV database for Windows batch processing
 ::   Provides simple CRUD operations using plain text format for storage
-::   File format: key\value, default file is _BATKV.bkv
+::   File format: key + backslash padding (36 chars total) + value
+::   Default file is _BATKV.bkv
 ::
 :: Public API:
 ::   call Bat-KV.bat :BKV.New [file]          - Create new database file
@@ -21,24 +22,27 @@
 ::   BKV_RESULT                 - Operation result (value for Fetch, Yes/No for Include)
 ::   BKV_ERR                    - Error description when status is NotOK, format: "Bat-KV ERR: [message]"
 ::
+:: File Format (v2.0):
+::   Each line: [key][backslash padding to 36 chars][value]
+::   Example: username\\\\\\\\\\\\\\\\\\\\\\\\\\\\Alice
+::   Keys occupy exactly 36 characters (padded with backslashes)
+::   Value starts at position 37, can be empty or contain any character
+::
+:: Breaking Change from v1.x:
+::   File format changed - v1.x files are not compatible
+::
 :: Examples:
 ::   call Bat-KV.bat :BKV.New "mydb.bkv"
 ::   call Bat-KV.bat :BKV.Append "username" "alice" "mydb.bkv"
 ::   call Bat-KV.bat :BKV.Fetch "username" "mydb.bkv"
 ::   echo Result: %BKV_RESULT%
 ::
-:: File Format:
-::   Each line contains: key\value
-::   Empty lines and lines without backslash are ignored
-::   Keys must contain only letters, numbers, and underscores
-::   Keys cannot exceed 36 characters in length
-::   Keys cannot contain backslash character
-::
 :: Notes:
 ::   - All operations are atomic using temporary files
 ::   - Default database file is _BATKV.bkv in current directory
 ::   - File paths can be relative or absolute
-::   - Supports ANSI characters in keys and values
+::   - Supports ANSI characters in values (including backslashes)
+::   - Empty values are supported
 ::   - Thread-safe through atomic file operations
 ::   - Private functions use BKV.Private prefix - do not call directly
 ::   - Private variables use BKV.Inner prefix - do not use directly
@@ -73,7 +77,7 @@ exit /b
 :: Private: Show help message
 :: =====================================================
 :BKV.Private.ShowHelp
-echo Bat-KV v1.0 - Ultra-lightweight KV database for Windows Batch
+echo Bat-KV v2.0 - Ultra-lightweight KV database for Windows Batch
 echo.
 echo Public API:
 echo   call Bat-KV.bat :BKV.New [file]
@@ -84,6 +88,8 @@ echo   call Bat-KV.bat :BKV.Fetch key [file]
 echo   call Bat-KV.bat :BKV.Include key [file]
 echo.
 echo Return Variables: BKV_STATUS, BKV_RESULT, BKV_ERR
+echo.
+echo File Format: [key padded to 36 chars with backslashes][value]
 exit /b
 
 :: =====================================================
@@ -151,6 +157,56 @@ set "BKV_RESULT="
 exit /b
 
 :: =====================================================
+:: Private: Pad key to 36 characters with backslashes
+:: Parameters: %1 - key to pad
+:: Returns: BKV.Inner.PaddedKey - padded key (36 chars)
+:: =====================================================
+:BKV.Private.PadKey
+setlocal EnableDelayedExpansion
+set "BKV.Inner.TempKey=%~1"
+set "BKV.Inner.Padding=\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"
+
+:: Calculate key length
+set "BKV.Inner.KeyLen=0"
+set "BKV.Inner.TempCalc=%BKV.Inner.TempKey%"
+:BKV.Private.PadKey.CountLoop
+if defined BKV.Inner.TempCalc (
+    set "BKV.Inner.TempCalc=!BKV.Inner.TempCalc:~1!"
+    set /a "BKV.Inner.KeyLen+=1"
+    goto :BKV.Private.PadKey.CountLoop
+)
+
+:: Calculate padding needed (36 - key length)
+set /a "BKV.Inner.PadLen=36-!BKV.Inner.KeyLen!"
+set "BKV.Inner.ResultKey=%BKV.Inner.TempKey%!BKV.Inner.Padding:~0,%BKV.Inner.PadLen%!"
+
+endlocal & set "BKV.Inner.PaddedKey=%BKV.Inner.ResultKey%"
+exit /b
+
+:: =====================================================
+:: Private: Extract key from padded line (remove trailing backslashes)
+:: Parameters: %1 - first 36 characters of line
+:: Returns: BKV.Inner.ExtractedKey - actual key without padding
+:: =====================================================
+:BKV.Private.ExtractKey
+setlocal EnableDelayedExpansion
+set "BKV.Inner.TempPadded=%~1"
+set "BKV.Inner.ExtractResult="
+
+:: Remove trailing backslashes
+:BKV.Private.ExtractKey.Loop
+if defined BKV.Inner.TempPadded (
+    if "!BKV.Inner.TempPadded:~-1!"=="\" (
+        set "BKV.Inner.TempPadded=!BKV.Inner.TempPadded:~0,-1!"
+        goto :BKV.Private.ExtractKey.Loop
+    )
+)
+set "BKV.Inner.ExtractResult=!BKV.Inner.TempPadded!"
+
+endlocal & set "BKV.Inner.ExtractedKey=%BKV.Inner.ExtractResult%"
+exit /b
+
+:: =====================================================
 :: Function: BKV.New
 :: Description: Create a new database file
 :: Parameters: %2 - Database file path (optional)
@@ -187,52 +243,63 @@ exit /b
 :: =====================================================
 :: Function: BKV.Append
 :: Description: Add or update a key-value pair
-:: Parameters: %2 - Key, %3 - Value, %4 - File path (optional)
+:: Parameters: %2 - Key, %3 - Value (can be empty), %4 - File path (optional)
 :: =====================================================
 :BKV.Append
+setlocal EnableDelayedExpansion
 set "BKV.Inner.Key=%~2"
 set "BKV.Inner.Value=%~3"
 call :BKV.Private.ValidateFile "%~4"
 
 :: Validate key format and length
 call :BKV.Private.ValidateKey "%BKV.Inner.Key%"
-if errorlevel 1 exit /b
-
-:: Validate value parameter
-if "%BKV.Inner.Value%"=="" (
-    call :BKV.Private.SetError "Value parameter is required"
+if errorlevel 1 (
+    for /f "tokens=1,2,3,4,5,6,7,8,9,10 delims=" %%a in ("!BKV_STATUS!") do endlocal & set "BKV_STATUS=%%a"
     exit /b
 )
 
 :: Create file if it doesn't exist
 if not exist "%BKV.Inner.FilePath%" type nul > "%BKV.Inner.FilePath%"
 
+:: Pad key to 36 characters
+call :BKV.Private.PadKey "%BKV.Inner.Key%"
+
 :: Atomic update using temporary file
 set "BKV.Inner.TempFile=%BKV.Inner.FilePath%.tmp"
 type nul > "%BKV.Inner.TempFile%" 2>nul
 if errorlevel 1 (
-    call :BKV.Private.SetError "Failed to create temporary file"
+    endlocal
+    set "BKV_STATUS=NotOK"
+    set "BKV_ERR=Bat-KV ERR: Failed to create temporary file"
+    set "BKV_RESULT="
     exit /b
 )
 
 :: Copy all lines except the key being updated
 for /f "usebackq delims=" %%i in ("%BKV.Inner.FilePath%") do (
-    for /f "tokens=1 delims=\" %%a in ("%%i") do (
-        if not "%%a"=="%BKV.Inner.Key%" echo %%i>> "%BKV.Inner.TempFile%"
+    set "BKV.Inner.Line=%%i"
+    set "BKV.Inner.LineKey=!BKV.Inner.Line:~0,36!"
+    call :BKV.Private.ExtractKey "!BKV.Inner.LineKey!"
+    if not "!BKV.Inner.ExtractedKey!"=="!BKV.Inner.Key!" (
+        echo !BKV.Inner.Line!>> "%BKV.Inner.TempFile%"
     )
 )
 
-:: Append new key-value pair
-echo %BKV.Inner.Key%\%BKV.Inner.Value%>> "%BKV.Inner.TempFile%"
+:: Append new key-value pair (padded key + value)
+echo !BKV.Inner.PaddedKey!!BKV.Inner.Value!>> "%BKV.Inner.TempFile%"
 
 :: Atomic replace
 move "%BKV.Inner.TempFile%" "%BKV.Inner.FilePath%" >nul 2>nul
 if errorlevel 1 (
     del "%BKV.Inner.TempFile%" 2>nul
-    call :BKV.Private.SetError "Failed to update database file"
+    endlocal
+    set "BKV_STATUS=NotOK"
+    set "BKV_ERR=Bat-KV ERR: Failed to update database file"
+    set "BKV_RESULT="
     exit /b
 )
 
+endlocal
 call :BKV.Private.SetSuccess
 exit /b
 
@@ -242,15 +309,20 @@ exit /b
 :: Parameters: %2 - Key, %3 - File path (optional)
 :: =====================================================
 :BKV.Remove
+setlocal EnableDelayedExpansion
 set "BKV.Inner.Key=%~2"
 call :BKV.Private.ValidateFile "%~3"
 
 :: Validate key format and length
 call :BKV.Private.ValidateKey "%BKV.Inner.Key%"
-if errorlevel 1 exit /b
+if errorlevel 1 (
+    for /f "tokens=1,2,3,4,5,6,7,8,9,10 delims=" %%a in ("!BKV_STATUS!") do endlocal & set "BKV_STATUS=%%a"
+    exit /b
+)
 
 :: Success if file doesn't exist
 if not exist "%BKV.Inner.FilePath%" (
+    endlocal
     call :BKV.Private.SetSuccess
     exit /b
 )
@@ -259,14 +331,20 @@ if not exist "%BKV.Inner.FilePath%" (
 set "BKV.Inner.TempFile=%BKV.Inner.FilePath%.tmp"
 type nul > "%BKV.Inner.TempFile%" 2>nul
 if errorlevel 1 (
-    call :BKV.Private.SetError "Failed to create temporary file"
+    endlocal
+    set "BKV_STATUS=NotOK"
+    set "BKV_ERR=Bat-KV ERR: Failed to create temporary file"
+    set "BKV_RESULT="
     exit /b
 )
 
 :: Copy all lines except the key being removed
 for /f "usebackq delims=" %%i in ("%BKV.Inner.FilePath%") do (
-    for /f "tokens=1 delims=\" %%a in ("%%i") do (
-        if not "%%a"=="%BKV.Inner.Key%" echo %%i>> "%BKV.Inner.TempFile%"
+    set "BKV.Inner.Line=%%i"
+    set "BKV.Inner.LineKey=!BKV.Inner.Line:~0,36!"
+    call :BKV.Private.ExtractKey "!BKV.Inner.LineKey!"
+    if not "!BKV.Inner.ExtractedKey!"=="!BKV.Inner.Key!" (
+        echo !BKV.Inner.Line!>> "%BKV.Inner.TempFile%"
     )
 )
 
@@ -274,10 +352,14 @@ for /f "usebackq delims=" %%i in ("%BKV.Inner.FilePath%") do (
 move "%BKV.Inner.TempFile%" "%BKV.Inner.FilePath%" >nul 2>nul
 if errorlevel 1 (
     del "%BKV.Inner.TempFile%" 2>nul
-    call :BKV.Private.SetError "Failed to update database file"
+    endlocal
+    set "BKV_STATUS=NotOK"
+    set "BKV_ERR=Bat-KV ERR: Failed to update database file"
+    set "BKV_RESULT="
     exit /b
 )
 
+endlocal
 call :BKV.Private.SetSuccess
 exit /b
 
@@ -287,29 +369,45 @@ exit /b
 :: Parameters: %2 - Key, %3 - File path (optional)
 :: =====================================================
 :BKV.Fetch
+setlocal EnableDelayedExpansion
 set "BKV.Inner.Key=%~2"
 call :BKV.Private.ValidateFile "%~3"
-set "BKV_RESULT="
+set "BKV.Inner.ResultValue="
 
 :: Validate key format and length
 call :BKV.Private.ValidateKey "%BKV.Inner.Key%"
-if errorlevel 1 exit /b
+if errorlevel 1 (
+    for /f "tokens=1,2,3,4,5,6,7,8,9,10 delims=" %%a in ("!BKV_STATUS!") do endlocal & set "BKV_STATUS=%%a"
+    exit /b
+)
 
 :: Return empty result if file doesn't exist
 if not exist "%BKV.Inner.FilePath%" (
+    endlocal
+    set "BKV_RESULT="
     call :BKV.Private.SetSuccess
     exit /b
 )
 
 :: Search for key and extract value
-for /f "usebackq tokens=1* delims=\" %%a in ("%BKV.Inner.FilePath%") do (
-    if "%%a"=="%BKV.Inner.Key%" (
-        set "BKV_RESULT=%%b"
-        call :BKV.Private.SetSuccess
-        exit /b
+for /f "usebackq delims=" %%i in ("%BKV.Inner.FilePath%") do (
+    set "BKV.Inner.Line=%%i"
+    set "BKV.Inner.LineKey=!BKV.Inner.Line:~0,36!"
+    call :BKV.Private.ExtractKey "!BKV.Inner.LineKey!"
+    if "!BKV.Inner.ExtractedKey!"=="!BKV.Inner.Key!" (
+        set "BKV.Inner.ResultValue=!BKV.Inner.Line:~36!"
+        goto :BKV.Fetch.Found
     )
 )
 
+:: Key not found
+endlocal
+set "BKV_RESULT="
+call :BKV.Private.SetSuccess
+exit /b
+
+:BKV.Fetch.Found
+endlocal & set "BKV_RESULT=%BKV.Inner.ResultValue%"
 call :BKV.Private.SetSuccess
 exit /b
 
@@ -319,28 +417,39 @@ exit /b
 :: Parameters: %2 - Key, %3 - File path (optional)
 :: =====================================================
 :BKV.Include
+setlocal EnableDelayedExpansion
 set "BKV.Inner.Key=%~2"
 call :BKV.Private.ValidateFile "%~3"
-set "BKV_RESULT=No"
 
 :: Validate key format and length
 call :BKV.Private.ValidateKey "%BKV.Inner.Key%"
-if errorlevel 1 exit /b
+if errorlevel 1 (
+    for /f "tokens=1,2,3,4,5,6,7,8,9,10 delims=" %%a in ("!BKV_STATUS!") do endlocal & set "BKV_STATUS=%%a"
+    exit /b
+)
 
 :: Return No if file doesn't exist
 if not exist "%BKV.Inner.FilePath%" (
+    endlocal
+    set "BKV_RESULT=No"
     call :BKV.Private.SetSuccess
     exit /b
 )
 
 :: Search for key existence
-for /f "usebackq tokens=1 delims=\" %%a in ("%BKV.Inner.FilePath%") do (
-    if "%%a"=="%BKV.Inner.Key%" (
+for /f "usebackq delims=" %%i in ("%BKV.Inner.FilePath%") do (
+    set "BKV.Inner.Line=%%i"
+    set "BKV.Inner.LineKey=!BKV.Inner.Line:~0,36!"
+    call :BKV.Private.ExtractKey "!BKV.Inner.LineKey!"
+    if "!BKV.Inner.ExtractedKey!"=="!BKV.Inner.Key!" (
+        endlocal
         set "BKV_RESULT=Yes"
         call :BKV.Private.SetSuccess
         exit /b
     )
 )
 
+endlocal
+set "BKV_RESULT=No"
 call :BKV.Private.SetSuccess
 exit /b

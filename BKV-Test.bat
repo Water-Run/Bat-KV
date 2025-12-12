@@ -270,9 +270,9 @@ echo === %Test.Framework.CurrentSuite% Test Suite ===
 call Bat-KV.bat :BKV.Append "" "value" "%Test.Framework.TestFile%"
 call :Test.Framework.ExecuteTest "Append without key" "NotOK" ""
 
-:: Test: Append without value
-call Bat-KV.bat :BKV.Append "key" "" "%Test.Framework.TestFile%"
-call :Test.Framework.ExecuteTest "Append without value" "NotOK" ""
+:: Test: Append with empty value (supported in v2.0)
+call Bat-KV.bat :BKV.Append "emptyval" "" "%Test.Framework.TestFile%"
+call :Test.Framework.ExecuteTest "Append with empty value" "OK" ""
 
 :: Test: Append with backslash in key
 call Bat-KV.bat :BKV.Append "key\with\backslash" "value" "%Test.Framework.TestFile%"
@@ -496,6 +496,7 @@ echo ===============================================
 echo.
 exit /b
 
+pause
 :: =====================================================
 :: Test Framework - Cleanup
 :: =====================================================
