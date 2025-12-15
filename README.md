@@ -16,31 +16,11 @@ Before getting started, let’s define some conventions:
 - **Public API**: Prefixed with `BKV.` (e.g. `BKV.New`, `BKV.Fetch`).  
 - **Return variables**: Use unified names: `BKV_STATUS`, `BKV_RESULT`, `BKV_ERR`.  
 
-### File Format Standards
-
-- **Database files**: `.bkv` extension (Batch Key-Value).  
-- **Default filename**: `_BATKV.bkv`.  
-- **Storage format**: One key-value pair per line, written as `key\value`.  
-- **Character encoding**: ANSI charset for cross-platform compatibility.  
-
 ### Key Constraints
 
 - **Allowed characters**: English letters, digits, and underscores only.  
 - **Length limit**: Max 36 characters.  
-- **Special characters**: Backslash (`\`) is not allowed in key names.  
 - **Case sensitivity**: Keys are case-sensitive.  
-
-### Value Constraints
-
-- **Character support**: Any ANSI characters allowed (including spaces, punctuation, etc.).  
-- **Special characters**: Values may include backslashes; escaping may be required internally.  
-- **Length**: No strict limit, but keeping reasonable length is recommended for performance.  
-
-### Line and Format Conventions
-
-- **File structure**: One key-value pair per line; blank lines are ignored.  
-- **Separator**: Backslash (`\`) separates key and value.  
-- **Line ending**: Windows CRLF line breaks.  
 
 ## Importing `Bat-KV`
 
