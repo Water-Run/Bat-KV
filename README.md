@@ -5,6 +5,8 @@ Its implementation is very simple, and it’s extremely easy to use—perfect fo
 **`Bat-KV` stores files in `.bkv` format**, which is plain text, very simple and human-readable, with the syntax `key\value`. The default path is `_BATKV.bkv` under the relative path.  
 `Bat-KV` is open source on [GitHub](https://github.com/Water-Run/Bat-KV/).  
 
+> Video introduction: [YouTube](https://www.youtube.com/watch?v=AGkG3ZnDXmU&t=6s) or [Bilibili](https://www.bilibili.com/video/BV15ZqWBHEoH/?spm_id_from=333.1387.homepage.video_card.click)
+
 ## Conventions and Standards
 
 Before getting started, let’s define some conventions:  

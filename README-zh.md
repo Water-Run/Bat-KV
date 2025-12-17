@@ -5,6 +5,8 @@
 **`Bat-KV`的文件存储在`.bkv`中**,是一种纯文本形式的,非常简单易读的格式,语法为`键\值`.默认路径在相对路径下的`_BATKV.bkv`.  
 `Bat-KV`开源于[GitHub](https://github.com/Water-Run/Bat-KV/).  
 
+> 视频介绍: [Youtube](https://www.youtube.com/watch?v=AGkG3ZnDXmU&t=6s)或[Bilibili](https://www.bilibili.com/video/BV15ZqWBHEoH/?spm_id_from=333.1387.homepage.video_card.click)  
+
 ## 约定和规范
 
 在开始之前,让我们先约定一些规范:  
